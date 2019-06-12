@@ -1,10 +1,14 @@
+from tempfile import SpooledTemporaryFile
 from threading import local
 
 import cProfile
 import pstats
 import logging
+import marshal
 
 from io import StringIO
+
+from django.core.files import File
 
 from silk import models
 from silk.config import SilkyConfig
@@ -154,10 +158,10 @@ class DataCollector(metaclass=Singleton):
 
             if SilkyConfig().SILKY_PYTHON_PROFILER_BINARY:
                 file_name = self.request.prof_file.storage.get_available_name("{}.prof".format(str(self.request.id)))
-                with open(self.request.prof_file.storage.path(file_name), 'w+b') as f:
-                    ps.dump_stats(f.name)
-                self.request.prof_file = f.name
-                self.request.save()
+                with SpooledTemporaryFile() as f:
+                    marshal.dump(ps.stats, f)
+                    self.request.prof_file = File(f, name=file_name)
+                    self.request.save()
 
         sql_queries = []
         for identifier, query in self.queries.items():
